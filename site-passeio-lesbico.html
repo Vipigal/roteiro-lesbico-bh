@@ -34,7 +34,7 @@ body {
   font-size: 16px;
   line-height: 1.6;
   padding-inline: clamp(16px, 4vw, 40px);
-  padding-block: clamp(16px, 3vh, 28px) 40px;
+  padding-block: 20px 40px;
 }
 .wrap { max-width: 1120px; margin-inline: auto; display: flex; flex-direction: column; gap: 24px; }
 
@@ -49,17 +49,17 @@ h1 { font: 700 clamp(1.9rem, 6vw, 3rem)/1.04 var(--f-display); letter-spacing: -
   .lede-short { display: inline; }
 }
 
-.stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; justify-items: start; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; justify-items: center; }
 .side { display: contents; }
 .head { order: 1; }
 /* a largura do mapa é calculada em fit(): no celular o começo do roteiro aparece logo abaixo, sem rolar */
-.mapcol { order: 2; width: var(--mw, min(100%, 440px)); min-width: 0; }
-#panel { order: 3; width: var(--mw, min(100%, 440px)); min-width: 0; margin-top: 4px; }
+.mapcol { order: 2; width: 100%; max-width: 560px; min-width: 0; margin-inline: auto; }
+#panel { order: 3; width: 100%; max-width: 560px; min-width: 0; margin-top: 4px; margin-inline: auto; }
 
 /* computador: mapa à esquerda; título e roteiro fixos à direita */
 @media (min-width: 900px) {
   .stage { grid-template-columns: auto minmax(0, 560px); justify-content: center; gap: 48px; align-items: start; }
-  .mapcol { grid-column: 1; grid-row: 1; order: 0; }
+  .mapcol { grid-column: 1; grid-row: 1; order: 0; width: var(--mw, 440px); max-width: none; margin-inline: 0; }
   .side {
     display: flex; flex-direction: column; gap: 20px; grid-column: 2; grid-row: 1; min-width: 0;
     position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px);
@@ -136,9 +136,10 @@ h1 { font: 700 clamp(1.9rem, 6vw, 3rem)/1.04 var(--f-display); letter-spacing: -
 
 /* modal da parada */
 .modal {
-  padding: 0; margin: auto; border: 1.5px solid var(--pink); border-radius: 12px;
+  position: fixed; inset: 0; margin: auto; height: -webkit-fit-content; height: fit-content;
+  padding: 0; border: 1.5px solid var(--pink); border-radius: 12px;
   background: var(--bg); color: var(--rose);
-  width: min(600px, calc(100vw - 24px));
+  width: min(600px, calc(100% - 24px));
   max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px);
   overflow: auto; overscroll-behavior: contain;
 }
@@ -149,7 +150,9 @@ h1 { font: 700 clamp(1.9rem, 6vw, 3rem)/1.04 var(--f-display); letter-spacing: -
 @keyframes modal-fundo { from { opacity: 0; } to { opacity: 1; } }
 html:has(dialog[open]) { overflow: hidden; }
 .modal .card { border: 0; border-radius: 0; overflow: visible; }
-.modal .card-top { position: sticky; top: 0; z-index: 2; background: var(--bg); align-items: center; padding-block: 8px; }
+.modal .card-top { position: sticky; top: 0; z-index: 2; background: var(--bg); align-items: center; flex-wrap: nowrap; padding-block: 8px; }
+.modal .card-top > span:first-child { flex: 1 1 auto; min-width: 0; }
+.modal .top-r { flex: none; margin-left: auto; }
 .top-r { display: inline-flex; align-items: center; gap: 12px; }
 .modal-x { width: 44px; height: 44px; flex: none; display: grid; place-items: center; padding: 0; border: 1px solid var(--plum); border-radius: 50%; background: transparent; color: var(--plum); cursor: pointer; }
 .modal-x:hover { background: var(--plum); color: var(--bg); }
@@ -441,15 +444,15 @@ button { font: inherit; color: inherit; }
     }
   }
   function play(){
-    const start = performance.now();
-    const step = now => { const t = Math.min(T, now-start); render(t); if(t < T) raf = requestAnimationFrame(step); else finish(); };
+    let start = null;   // usa o próprio carimbo do rAF (no Safari ele pode ser menor que performance.now())
+    const step = now => { if(start === null) start = now; const t = Math.max(0, Math.min(T, now-start)); render(t); if(t < T) raf = requestAnimationFrame(step); else finish(); };
     raf = requestAnimationFrame(step);
   }
   if(isOverlay) root.addEventListener('click', finish);   // click to skip
 
-  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /* O brinde toca sempre (2 s, e um toque pula). Antes ele era cortado quando o iPhone estava com "Reduzir Movimento". */
   render(0);
-  if(reduce) setTimeout(finish, 300); else setTimeout(play, 300);
+  setTimeout(play, 300);
 })();
 </script>
 <!-- ========== FIM INTRO: BRINDE ========== -->
@@ -729,11 +732,15 @@ document.addEventListener("click", function (e) {
 
 /* O começo do roteiro precisa aparecer logo abaixo do mapa, sem rolar: o mapa ocupa só a altura que sobra na tela. */
 function fit() {
+  var root = document.documentElement.style;
+  var wide = window.matchMedia && window.matchMedia("(min-width: 900px)").matches;
+  if (!wide) {   // celular: o mapa ocupa a largura toda via CSS. Medir innerHeight aqui faz a página "pular" quando a barra do Safari some/aparece.
+    root.removeProperty("--mw"); root.removeProperty("--mh"); return;
+  }
   var mc = document.getElementById("mapcol");
   var top = mc.getBoundingClientRect().top + (window.pageYOffset || 0);
   // reserva = espaço entre o mapa e o cartão + topo do cartão até o fim do título + um pedaço do texto
   var h = document.getElementById("intro-h"), card = document.querySelector("#panel .card");
-  var wide = window.matchMedia && window.matchMedia("(min-width: 900px)").matches;
   var peek = wide ? 24 : ((h && card) ? 18 + (h.getBoundingClientRect().bottom - card.getBoundingClientRect().top) + 28 : 190);
   var w = Math.max(270, Math.min(560, (window.innerHeight - top - peek) * MAPW / MAPH));
   var box = mc.parentElement.clientWidth;
@@ -742,7 +749,7 @@ function fit() {
   document.documentElement.style.setProperty("--mh", Math.round(mw * MAPH / MAPW) + "px");   // no computador, o painel da direita tem a altura do mapa
 }
 window.addEventListener("resize", fit);
-window.addEventListener("orientationchange", fit);
+window.addEventListener("orientationchange", function () { setTimeout(fit, 250); });
 if (document.fonts && document.fonts.ready) { document.fonts.ready.then(fit); }
 
 drawMap();
@@ -753,8 +760,7 @@ fit();   // segunda medida, já com o mapa no novo tamanho
 /* Depois do brinde, o roxo da gota vira o fundo do mapa: a rota se desenha e as paradas aparecem em ordem. */
 (function () {
   var mapEl = document.getElementById("map");
-  var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!document.querySelector(".brinde-intro") || calm) return;
+  if (!document.querySelector(".brinde-intro")) return;
   var aberto = false;
   mapEl.classList.add("pre");
   function abrir() {
